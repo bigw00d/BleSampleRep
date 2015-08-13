@@ -1,0 +1,4 @@
+INDEX VERSION 1.127+C:\Users\XCCubeSSD\workspace\BleSample2\.metadata\.plugins\org.eclipse.jdt.core
+3323870105.index
+3953669486.index
+2377343079.index

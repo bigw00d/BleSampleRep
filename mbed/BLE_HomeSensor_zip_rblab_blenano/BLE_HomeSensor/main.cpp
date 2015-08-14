@@ -28,13 +28,20 @@
 #define DEBUG(...) /* nothing */
 #endif /* #if NEED_CONSOLE_OUTPUT */
 
+#define MSG_LEN_MAX 32
+
+#define LED_ON  0
+#define LED_OFF 1
+
 BLEDevice  ble;
 DigitalOut led1(LED1);
+AnalogIn ain(p5);
 
 UARTService *uartServicePtr;
 
-uint8_t             TestPayload[6] = { 'H', 'E', 'L', 'L', 'O', '!' };
-
+uint8_t         TestPayload[6] = { 'H', 'E', 'L', 'L', 'O', '!' };
+char            msg[MSG_LEN_MAX] ="" ;
+ 
 void disconnectionCallback(Gap::Handle_t handle, Gap::DisconnectionReason_t reason)
 {
     DEBUG("Disconnected!\n\r");
@@ -53,14 +60,21 @@ void onDataWritten(const GattCharacteristicWriteCBParams *params)
 
 void periodicCallback(void)
 {
-    led1 = !led1;
+    float v;
+    uint8_t strlength;
+
+    v = ain.read() * 3.3;
+    sprintf(msg,"v=%4.2f\0", v);
+    for(strlength=0; strlength<MSG_LEN_MAX; ++strlength) {
+        if(msg[strlength]=='\0')break;
+    }
+    ble.updateCharacteristicValue(uartServicePtr->getRXCharacteristicHandle(), (uint8_t *)msg, strlength);
 }
 
 int main(void)
 {
-    led1 = 1;
+    led1 = LED_OFF;
     Ticker ticker;
-    ticker.attach(periodicCallback, 1);
 
     DEBUG("Initialising the nRF51822\n\r");
     ble.init();
@@ -81,11 +95,7 @@ int main(void)
     UARTService uartService(ble);
     uartServicePtr = &uartService;
 
-//    while (true) {
-//        wait(0.5);
-//        ble.updateCharacteristicValue(uartServicePtr->getRXCharacteristicHandle(), TestPayload, sizeof(TestPayload));
-//    }
-
+    ticker.attach(periodicCallback, 1);
     while (true) {
         ble.waitForEvent();
     }

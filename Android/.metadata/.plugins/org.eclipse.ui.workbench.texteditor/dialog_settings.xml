@@ -2,22 +2,23 @@
 <section name="Workbench">
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
 		<item value="false" key="isRegEx"/>
-		<item value="CLIENT_CHARACTERISTIC_CONFIG" key="selection"/>
+		<item value="twitter_test" key="selection"/>
 		<item value="true" key="casesensitive"/>
 		<item value="false" key="incremental"/>
 		<item value="true" key="wrap"/>
 		<item value="false" key="wholeword"/>
 		<list key="findhistory">
-			<item value="characteristic"/>
-			<item value="CLIENT_CHARACTERISTIC_CONFIG"/>
-			<item value="descriptor"/>
-			<item value="onCharacteristicChanged"/>
-			<item value="00002902-0000-1000-8000-00805f9b34fb"/>
-			<item value="ENABLE_NOTIFICATION_VALUE"/>
-			<item value="onService"/>
-			<item value="DEVICE_BUTTON_SENSOR_CHARACTERISTIC_UUID"/>
+			<item value="twitter_test"/>
+			<item value="mListener"/>
+			<item value="disconne"/>
+			<item value="dis"/>
+			<item value="mLogText"/>
+			<item value="mHandler4twitter"/>
+			<item value="mHandler"/>
+			<item value="updateButtonState"/>
 		</list>
 		<list key="replacehistory">
+			<item value="DEVICE_RX_CHARACTERISTIC_UUID"/>
 		</list>
 	</section>
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog_dialogBounds">

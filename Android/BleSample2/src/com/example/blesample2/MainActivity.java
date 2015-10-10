@@ -24,6 +24,22 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattDescriptor;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import twitter4j.AsyncTwitter; 
+import twitter4j.auth.RequestToken;
+import twitter4j.TwitterListener;
+import twitter4j.TwitterAdapter;
+import twitter4j.auth.AccessToken;
+import twitter4j.AsyncTwitterFactory; 
+import twitter4j.Status;
+import twitter4j.QueryResult;
+import android.widget.EditText;
+import android.net.Uri;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+
 public class MainActivity extends Activity implements BluetoothAdapter.LeScanCallback {
     private BluetoothAdapter mBluetoothAdapter;
     private BluetoothManager mBluetoothManager;
@@ -44,8 +60,73 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
     private static final String DEVICE_TX_CHARACTERISTIC_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; /** 対象のキャラクタリスティックUUID(デバイスにより変える必要がある) */
     private static final String CLIENT_CHARACTERISTIC_CONFIG = "00002902-0000-1000-8000-00805f9b34fb"; /** キャラクタリスティック設定UUID(これは固定のようだ) */
 
+    public enum WaterStatus { W_FULL, W_LOW, W_EMPTY }
+    private WaterStatus watar_status=WaterStatus.W_FULL;
+    private static final double WATER_THRESHOULD_FULL_LOW = 2.4;
+    private static final double WATER_THRESHOULD_LOW_EMPTY = 1.6;
 
-    @Override
+    // twitter
+	private final String API_KEY = "??????????????????";
+	private final String API_SECRET = "????????????????????????????????????";
+	private final String PREF_FILE_NAME = "twitter_test";
+	private final String PREF_TOKEN = "token";
+	private final String PREF_SECRET = "secret";
+	private AsyncTwitter mTwitter;
+	private RequestToken mReqToken;
+	private Handler mHandler4twitter;     
+	private EditText mLogText;   
+    StringBuilder mTweetText = new StringBuilder();
+	// private final String sCr = "\r";
+    // private final String sLf = "\n";
+
+    private final TwitterListener mListener = new TwitterAdapter() {
+
+    	@Override
+    	public void gotOAuthRequestToken(RequestToken token) {
+    		mReqToken = token;
+    		Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(mReqToken.getAuthorizationURL()));
+    		startActivity(intent);
+    	}
+    	@Override
+    	public void gotOAuthAccessToken(AccessToken token) {
+			SharedPreferences pref = getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
+			Editor editor = pref.edit();
+			editor.putString(PREF_TOKEN, token.getToken());
+			editor.putString(PREF_SECRET, token.getTokenSecret());
+			editor.commit();
+			mTwitter.setOAuthAccessToken(new AccessToken(token.getToken(), token.getTokenSecret()));
+    	}
+    	@Override
+    	public void updatedStatus(Status status) {
+			final String logText = "ID:" + status.getId() + "\n" + status.getText();
+			mHandler4twitter.post(new Runnable() {
+
+				@Override
+				public void run() {
+					mLogText.setText(logText);
+				}
+				
+			});
+    	}
+    	@Override
+    	public void searched(QueryResult queryResult) {
+			String log = "";
+			for (Status status : queryResult.getTweets()) {
+				log += status.getText() + "\n";
+			}
+			final String logText = log;
+			mHandler4twitter.post(new Runnable() {
+
+				@Override
+				public void run() {
+					mLogText.setText(logText);
+				}
+				
+			});	
+    	}
+    };
+	
+	@Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -101,8 +182,44 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
             }
         };
 
+        // [Twitter]
+        mTwitter = new AsyncTwitterFactory().getInstance();
+        mTwitter.addListener(mListener);
+        mTwitter.setOAuthConsumer(API_KEY, API_SECRET);
+		AccessToken token = getAccessToken();
+		if (token == null) {
+			mTwitter.getOAuthRequestTokenAsync("twittercallback://callback");
+		} else {
+			mTwitter.setOAuthAccessToken(token);
+		}				
+		mLogText = (EditText)findViewById(R.id.editText1);
+		mHandler4twitter = new Handler();        
     }
 
+	// [twitter]
+	public AccessToken getAccessToken() {
+		SharedPreferences pref = getSharedPreferences(PREF_FILE_NAME, Context.MODE_PRIVATE);
+		String token = pref.getString(PREF_TOKEN, null);
+		String secret = pref.getString(PREF_SECRET, null);
+		
+		if (token != null && secret != null) {
+			return new AccessToken(token, secret);
+		} else {
+			return null;
+		}
+
+	}
+	@Override
+    protected void onNewIntent(Intent intent) {
+    	//ブラウザからのコールバックで呼ばれる
+    	final Uri uri = intent.getData();      
+    	final String verifier = uri.getQueryParameter("oauth_verifier");
+    	if (verifier != null) {
+    		mTwitter.getOAuthAccessTokenAsync(mReqToken, verifier);
+    	}
+    }	
+
+	// [ble]
     /** BLE機器を検索する */
     private void connect() {
         Log.d(TAG, "start searching");
@@ -120,6 +237,7 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
 
     /** BLE 機器との接続を解除する */
     private void disconnect() {
+
         Log.d(TAG, "start disconnecting");
         if (mBluetoothGatt != null) {
             mBluetoothGatt.close();
@@ -127,7 +245,8 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
             setStatus(BleStatus.CLOSED);
         }
         mIsBluetoothEnable = false;
-    }
+        
+	}
 
     private void send() {
         if (mIsBluetoothEnable) {
@@ -272,9 +391,34 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
                 boolean left = (0 < (data[0] & 0x02));
                 boolean right = (0 < (data[0] & 0x01));
                 updateButtonState(left, right);
+                Matcher m = Pattern.compile("v=([0-9]+\\.[0-9]+)").matcher(result);
+                if (m.matches()) {
+                    Log.d(TAG, "Match Data:" + m.group(1));
+                    double db = Double.parseDouble(m.group(1));
+                    updateWaterState(db);
+                    Log.d(TAG, "Water Status:" + getTweetmessage(watar_status));
+                }
             }
         }
     };
+
+    private void updateWaterState(double water) {
+        if(water > WATER_THRESHOULD_FULL_LOW) {
+            watar_status=WaterStatus.W_FULL;
+        }
+        else if(water > WATER_THRESHOULD_LOW_EMPTY) {
+            watar_status=WaterStatus.W_LOW;
+        }
+        else {
+            watar_status=WaterStatus.W_EMPTY;
+        }
+        String tweet = getTweetmessage(watar_status);
+        mTweetText.setLength(0);
+    	mTweetText.append(tweet);
+		String text = mTweetText.toString();
+		mTwitter.updateStatus(text);
+        
+    }
 
     private void updateButtonState(final boolean left, final boolean right) {
         runOnUiThread(new Runnable() {
@@ -287,7 +431,15 @@ public class MainActivity extends Activity implements BluetoothAdapter.LeScanCal
             }
         });
     }
-    
+
+    private String getTweetmessage(WaterStatus status) {
+        switch (status) {
+        case W_FULL: return "お水は大丈夫だぜ！";
+        case W_LOW: return "お水が少なくなってきたな・・・";
+        case W_EMPTY: return "水が少ないぞ！早く給水してくれ！";
+        default: throw new IllegalArgumentException();
+        }
+    }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
